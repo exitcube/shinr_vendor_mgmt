@@ -12,7 +12,7 @@ import {
   import { File } from "./File";
   import { Vendor } from "./Vendor";
   
-  @Entity({ name: "vendorFile" }) 
+  @Entity("vendorFile") 
   export class VendorFile {
     @PrimaryGeneratedColumn()
     id: number;
