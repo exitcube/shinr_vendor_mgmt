@@ -4,7 +4,6 @@ import typeormPlugin from "./plugins/typeorm";
 import cors from "@fastify/cors"; // REMOVE ON PRODUCTION
 import errorHandlerPlugin from "./plugins/errorHandler";
 import routes from "./routes/root";
-import vendorDevicePlugin from "./plugins/vendorDevice";
 
 
 
@@ -29,7 +28,7 @@ export async function buildApp() {
   await fastify.register(mult)
   await fastify.register(typeormPlugin);
   await fastify.register(errorHandlerPlugin);
-  await fastify.register(vendorDevicePlugin);
+  // await fastify.register(vendorDevicePlugin);
 
   // Register routes
   await fastify.register(routes);
