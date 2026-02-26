@@ -1,8 +1,6 @@
 
 import { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import vendorRoutes from '../vendor/routes';
-import serviceRoutes from '../service/routes';
-import productRoutes from '../product/routes';
 import bookingRoutes from '../booking/routes';
 
 export default async function routes(
@@ -17,7 +15,5 @@ export default async function routes(
   });
 
   fastify.register(vendorRoutes, { prefix: '/vendor' });
-  fastify.register(serviceRoutes, { prefix: '/service' });
-  fastify.register(productRoutes, { prefix: '/product' });
   fastify.register(bookingRoutes, { prefix: '/booking' });
 }
