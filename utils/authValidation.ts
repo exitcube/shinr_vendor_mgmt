@@ -1,6 +1,6 @@
 
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { verifyVendorAccessToken, verifyAdminAccessToken } from './jwt';
+import { verifyVendorAccessToken} from './jwt';
 import { createErrorResponse } from './response';
 import { vendorAccessTokenPayloadType, AuthenticatedUser, adminAccessTokenPayloadType, AdminAuthenticatedUser, VendorAuthenticatedUser } from '../types/config';
 
@@ -63,29 +63,17 @@ export async function authValidationPreHandler(
         // Verify the JWT token
         try {
             // Using verifyVendorAccessToken and typing it with deviceUUId included
-            const payload = await verifyVendorAccessToken(token) as { vendorId: number; tokenId: number; jti: string; deviceUUId: string };
+            const payload = await verifyVendorAccessToken(token) as { userId: number; tokenId: number; jti: string;   };
 
             // Verify that the device-id in header matches the device in token
             // Note: The deviceId in header is likely the UUID in this context if we enforce UUID everywhere, 
             // but usually x-device-id might be a physical ID. Currently logic compares it to payload.deviceUUId.
             // If the client sends the deviceUUID in x-device-id header, this works.
 
-            if (payload.deviceUUId !== deviceId) {
-                const errorResponse = createErrorResponse({
-                    message: 'Device ID mismatch',
-                    code: 'DEVICE_ID_MISMATCH',
-                    statusCode: 403,
-                    timestamp: new Date().toISOString(),
-                    path: request.url,
-                    method: request.method
-                }, 'Device ID in header does not match the device associated with this token');
-
-                return reply.status(403).send(errorResponse);
-            }
 
             // Attach user info to request for use in handlers
             const userInfo: VendorAuthenticatedUser = {
-                vendorId: payload.vendorId,
+                vendorId: payload.userId,
                 tokenId: payload.tokenId,
             };
             (request as any).user = userInfo;

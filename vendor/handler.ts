@@ -1,144 +1,300 @@
 
 import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from 'fastify';
+import { LoginRequestBody, refreshRequestBody, verifyOtpRequestBody } from './type';
+import { Vendor, VendorToken } from '../models';
+import { VendorOtp } from '../models/VendorOtp';
+import { APIError } from '../types/errors';
+import { generateOtp } from '../utils/helper';
+import { generateVendorOtpToken, generateVendorRefreshToken, signVendorAccessToken, verifyVendorOtpToken, verifyVendorRefreshToken } from '../utils/jwt';
+import { createSuccessResponse } from '../utils/response';
+import { RefreshTokenStatus } from '../utils/constant';
+ 
 
 export default function controller(fastify: FastifyInstance, opts: FastifyPluginOptions): any {
     return {
-        // registerVendorHandler: async (request: FastifyRequest<{ Body: registerVendorBody }>, reply: FastifyReply) => {
-        //     try {
-        //         const { businessName, ownerName, phone, email, password, location, serviceType } = request.body;
-        //         const vendorRepo = fastify.db.getRepository(Vendor);
+         generateOtpHandler: async (request: FastifyRequest<{ Body: LoginRequestBody }>, reply: FastifyReply) => {
+            try {
+                const { mobile } = request.body;
 
-        //         const existingVendor = await vendorRepo.findOne({ where: [{ phone }, { email: email || "" }] });
-        //         if (existingVendor) {
-        //             throw new APIError("Vendor already exists", 400, "VENDOR_EXISTS", true, "Vendor with this phone or email already exists");
-        //         }
+             
+                const vendorRepo = fastify.db.getRepository(Vendor);;
+                const vendorOtpRepo = fastify.db.getRepository(VendorOtp);
+                const vendorTokenRepo = fastify.db.getRepository(VendorToken);
 
-        //         const hashedPassword = await bcrypt.hash(password, 10);
-        //         const newVendor = vendorRepo.create({
-        //             businessName,
-        //             ownerName,
-        //             phone,
-        //             email,
-        //             password: hashedPassword,
-        //             location,
-        //             serviceType,
-        //             isActive: true
-        //         });
 
-        //         await vendorRepo.save(newVendor);
+                let vendor = await vendorRepo.findOne({ where: { mobile, isActive: true } });
+                 if (!vendor) {
+                     throw new APIError(
+                        "Invalid mobile number",
+                        400,
+                        "INVALID_MOBILE_NUMBER",
+                        false,
+                        "The mobile number provided is not registered with us."
+                    );
+                 }
 
-        //         return reply.status(201).send(createSuccessResponse({ vendorId: newVendor.id }, "Vendor registered successfully"));
 
-        //     } catch (error) {
-        //         throw new APIError(
-        //             (error as APIError).message,
-        //             (error as APIError).statusCode || 400,
-        //             (error as APIError).code || "REGISTER_FAILED",
-        //             true,
-        //             (error as APIError).publicMessage || "Failed to register vendor."
-        //         );
-        //     }
-        // },
+                vendor.lastActive = new Date();
+                const otp = generateOtp();
+                const vendorOtp = vendorOtpRepo.create({
+                    vendorId: vendor.id,
+                    otp,
+                    lastRequestedTime: new Date(),
+                    requestCount: 1,
+                    otpToken: ""
+                });
+                 await vendorOtpRepo.save(vendorOtp);
+                const otpToken = await generateVendorOtpToken({
+                    // userId: user.id,
+                    tokenId: vendorOtp.id,
+                    userUUId: vendor.uuid,
+                    
+                });
+                vendorOtp.otpToken = otpToken;
+                await vendorOtpRepo.save(vendorOtp);
 
-        // loginVendorHandler: async (request: FastifyRequest<{ Body: loginVendorBody }>, reply: FastifyReply) => {
-        //     try {
-        //         const { identifier, password } = request.body;
-        //         const deviceId = request.headers['x-device-id'] as string; // Expect device ID in header
+                const result = createSuccessResponse({ otpToken }, "OTP generated");
+                return reply.status(200).send(result);
 
-        //         if (!deviceId) {
-        //             throw new APIError("Device ID missing", 400, "MISSING_DEVICE_ID", true, "x-device-id header is required");
-        //         }
+            } catch (error) {
+                throw new APIError(
+                    (error as APIError).message,
+                    500,
+                    "OTP_GENERATION_FAILED",
+                    true,
+                    "Failed to generate OTP. Please try again later."
+                );
+            }
+        },
+        verifyOtpHandler: async (request: FastifyRequest<{ Body: verifyOtpRequestBody }>, reply: FastifyReply) => {
+            try {
+                const { otpToken, otp } = request.body;
+               
+                const vendorRepo = fastify.db.getRepository(Vendor);
+                const vendorOtpRepo = fastify.db.getRepository(VendorOtp);
+                const vendorTokenRepo = fastify.db.getRepository(VendorToken);
+                
 
-        //         const vendorRepo = fastify.db.getRepository(Vendor);
-        //         const tokenRepo = fastify.db.getRepository(VendorToken);
-        //         const deviceRepo = fastify.db.getRepository(VendorDevice);
+                
+                const payload = await verifyVendorOtpToken(otpToken);
+                console.log("payload", payload);
+                
+                const vendor = await vendorRepo.findOne({
+                    where: { uuid: payload.userUUId, isActive: true },
+                });
+                if (!vendor) {
+                    throw new APIError(
+                        "User not found",
+                        400,
+                        "USER_NOT_FOUND",
+                        false,
+                        "User does not exist. Please register."
+                    );
+                }
+                const otpRecord = await vendorOtpRepo.findOne({
+                    where: { id :payload.tokenId, vendorId: vendor.id,  isActive: true },
+                });
 
-        //         const vendor = await vendorRepo.findOne({
-        //             where: [
-        //                 { phone: identifier },
-        //                 { email: identifier }
-        //             ],
-        //             relations: ['device']
-        //         });
+                if (otpRecord?.otpToken !== otpToken) {
+                    throw new APIError(
+                        "Invalid OTP token",
+                        400,
+                        "INVALID_OTP_TOKEN",
+                        false,
+                        "The provided OTP token is invalid. Please login again."
+                    );
+                }
+                const DEV_OTP = process.env.NODE_ENV === "development" ? process.env.DEV_OTP || "1234" : null;
+                if (otp !== DEV_OTP && otpRecord?.otp !== otp) {
+                    throw new APIError(
+                        "Incorrect OTP",
+                        400,
+                        "INVALID_OTP",
+                        false,
+                        "The provided OTP is invalid. Please request a new OTP."
+                    );
+                }
+                await vendorTokenRepo.update(
+                    { vendorId: vendor.id,   isActive: true }, // condition
+                    {
+                        isActive: false,
+                        refreshTokenStatus: RefreshTokenStatus.INACTIVE
+                    } 
+                );
+                const vendorToken = vendorTokenRepo.create({
+                    vendorId: vendor.id,
+                    refreshTokenStatus: RefreshTokenStatus.ACTIVE,
+                    isActive: true,
+                    refreshToken: "",
+                    accessToken: ""
+                });
 
-        //         if (!vendor) {
-        //             throw new APIError("Vendor not found", 400, "VENDOR_NOT_FOUND", false, "Invalid credentials");
-        //         }
+                await vendorTokenRepo.save(vendorToken);
 
-        //         const isPasswordValid = await bcrypt.compare(password, vendor.password);
-        //         if (!isPasswordValid) {
-        //             throw new APIError("Invalid password", 401, "INVALID_PASSWORD", false, "Invalid credentials");
-        //         }
+                const refreshToken = await generateVendorRefreshToken({ userUUId: vendor.uuid,   tokenId: vendorToken.id });
+                const accessToken = await signVendorAccessToken({ userId: vendor.id, userUUId: vendor.uuid,  tokenId: vendorToken.id});
+                console.log(refreshToken, accessToken);
+                const refreshTokenExpiry = new Date(Date.now() + parseInt(process.env.REFRESH_TOKEN_EXPIRY_DAYS || "60") * 24 * 60 * 60 * 1000);
+                vendorToken.refreshToken = refreshToken;
+                vendorToken.accessToken = accessToken;
+                vendorToken.refreshTokenExpiry = refreshTokenExpiry;
+                await vendorTokenRepo.save(vendorToken);
+                otpRecord.isActive = false;
+                await vendorOtpRepo.save(otpRecord);
+                const result = createSuccessResponse({ accessToken, refreshToken }, "OTP verified and tokens generated");
+                return reply.status(200).send(result);
 
-        //         // Device Logic
-        //         let vendorDevice = await deviceRepo.findOne({ where: { vendorId: vendor.id } });
 
-        //         // If device exists but UUID mismatch? Or just update it?
-        //         // For simplicity, we create one if not exists, or update.
-        //         // Or if we strictly follow uuid flow:
 
-        //         if (!vendorDevice) {
-        //             vendorDevice = deviceRepo.create({
-        //                 vendorId: vendor.id,
-        //                 deviceId: deviceId, // This might be a physical device ID or similar
-        //                 isActive: true,
-        //                 lastLogin: new Date(),
-        //                 lastActive: new Date(),
-        //                 // uuid is auto-generated
-        //             });
-        //             await deviceRepo.save(vendorDevice);
+            } catch (error) {
+                throw new APIError(
+                    (error as APIError).message,
+                    (error as APIError).statusCode || 400,
+                    (error as APIError).code || "OTP_VERIFICATION_FAILED",
+                    true,
+                    (error as APIError).publicMessage || "Failed to verify OTP. Please try again later."
+                );
+            }
+        },
+        resendOtpHandler: async (request: FastifyRequest<{ Body: { otpToken: string } }>, reply: FastifyReply ) => {
+          try {
+            const { otpToken } = request.body;
+             
+            
+            const vendorOtpRepo = fastify.db.getRepository(VendorOtp);
+    
+            const payload = await verifyVendorOtpToken(otpToken);
+            const { userUUId,tokenId } = payload;
+    
+        
+            const otpRecord = await vendorOtpRepo.findOne({
+              where: { id:tokenId, isActive: true },
+            });
+    
+            if (!otpRecord) {
+              throw new APIError(
+                "No active OTP request",
+                400,
+                "NO_ACTIVE_OTP",
+                false,
+                "No active OTP found for this device. Please initiate login again."
+              );
+            }     
+            if (otpRecord.requestCount > 5) {
+              otpRecord.isActive = false;
+              await vendorOtpRepo.save(otpRecord);
+              throw new APIError(
+                "OTP limit exceeded",
+                429,
+                "OTP_LIMIT_EXCEEDED",
+                false,
+                "Too many OTP requests. Try again later."
+              );
+            } 
+            const secondsSinceLastRequest = Math.floor((Date.now() - new Date(otpRecord.lastRequestedTime).getTime()) / 1000);
+            if (secondsSinceLastRequest < 45) {
+              const waitSeconds = 45 - secondsSinceLastRequest;
+              throw new APIError(
+                "OTP resend cooldown",
+                429,
+                "OTP_RESEND_COOLDOWN",
+                false,
+               ` Please wait ${waitSeconds} seconds before requesting a new OTP.`
+              );
+            }
+          
+            const newOtp = generateOtp();
+            const newOtpToken = await generateVendorOtpToken({tokenId,userUUId});
 
-        //             // We need the generated UUID for the token
-        //             // But wait, vendorDevice.uuid is generated on insert.
-        //         } else {
-        //             vendorDevice.lastLogin = new Date();
-        //             vendorDevice.lastActive = new Date();
-        //             vendorDevice.deviceId = deviceId; // Update physical device ID mapping
-        //             await deviceRepo.save(vendorDevice);
-        //         }
+              otpRecord.otp = newOtp;
+              otpRecord.otpToken = newOtpToken;
+              otpRecord.lastRequestedTime = new Date();
+              otpRecord.requestCount += 1;
+    
+            await vendorOtpRepo.save(otpRecord);
+    
+            const result = createSuccessResponse(
+              { otpToken: otpRecord.otpToken },
+              "OTP resent successfully"
+            );
+            return reply.status(200).send(result);
+          } catch (error) {
+            throw new APIError(
+              (error as APIError).message,
+              (error as APIError).statusCode || 400,
+              (error as APIError).code || "OTP_RESEND_FAILED",
+              true,
+              (error as APIError).publicMessage ||
+                "Failed to resend OTP. Please try again later."
+            );
+          }
+        },
+         generateRefreshTokenHandler: async ( request: FastifyRequest<{ Body: refreshRequestBody }>, reply: FastifyReply) => {
+          try {
+            const { refreshToken } = request.body;
 
-        //         const vendorToken = tokenRepo.create({
-        //             vendorId: vendor.id,
-        //             refreshTokenStatus: RefreshTokenStatus.ACTIVE,
-        //             isActive: true,
-        //             refreshToken: "",
-        //             accessToken: "",
-        //         });
-        //         await tokenRepo.save(vendorToken);
+            const vendorTokenRepo = fastify.db.getRepository(VendorToken);
+            const vendorRepo = fastify.db.getRepository(Vendor);
 
-        //         const refreshToken = await generateVendorRefreshToken({
-        //             vendorId: vendor.id,
-        //             tokenId: vendorToken.id,
-        //         });
+            const payload: any = await verifyVendorRefreshToken(refreshToken);
+            const { userUUId,  tokenId } = payload;
 
-        //         const accessToken = await signVendorAccessToken({
-        //             vendorId: vendor.id,
-        //             tokenId: vendorToken.id,
-        //             deviceUUId: vendorDevice.uuid // Use the VendorDevice UUID
-        //         });
+            const vendor = await vendorRepo.findOne({ where: { uuid: userUUId, isActive: true } });
+            if (!vendor) {
+              throw new APIError('User not found', 404, 'USER_NOT_FOUND', false, 'The user associated with this token does not exist.');
+            }
 
-        //         const refreshTokenExpiry = new Date(
-        //             Date.now() +
-        //             parseInt(process.env.REFRESH_TOKEN_EXPIRY_DAYS || "60") *
-        //             24 * 60 * 60 * 1000
-        //         );
+            const existing = await vendorTokenRepo.findOne({ where: { id: tokenId, } });
+            if (!existing) {
+              throw new APIError('Refresh token not found', 400, 'REFRESH_TOKEN_NOT_FOUND', false, 'Invalid or inactive refresh token.');
+            }
+     
+            if (existing.refreshToken !== refreshToken) {
+              throw new APIError('Refresh token mismatch', 400, 'REFRESH_TOKEN_MISMATCH', false, 'Provided refresh token does not match.');
+            }
 
-        //         vendorToken.refreshToken = refreshToken;
-        //         vendorToken.accessToken = accessToken;
-        //         vendorToken.refreshTokenExpiry = refreshTokenExpiry;
-        //         await tokenRepo.save(vendorToken);
+            if (existing.refreshTokenStatus !== RefreshTokenStatus.ACTIVE) {
+              await vendorTokenRepo.update( { id: existing.id },{ refreshTokenStatus: RefreshTokenStatus.REVOKED });
+              throw new APIError('Refresh token invalid state', 400, 'REFRESH_TOKEN_INVALID_STATE', false, 'Refresh token is not active.');
+            }
 
-        //         return reply.status(200).send(createSuccessResponse({ accessToken, refreshToken, vendor, deviceUUId: vendorDevice.uuid }, "Login successful"));
 
-        //     } catch (error) {
-        //         throw new APIError(
-        //             (error as APIError).message,
-        //             (error as APIError).statusCode || 400,
-        //             (error as APIError).code || "LOGIN_FAILED",
-        //             true,
-        //             (error as APIError).publicMessage || "Login failed."
-        //         );
-        //     }
-        // }
+            existing.isActive = false;
+            existing.refreshTokenStatus = RefreshTokenStatus.USED;
+            await vendorTokenRepo.save(existing);
+
+          
+            const newTokenRow = vendorTokenRepo.create({
+              vendorId: vendor.id,
+              deviceId: existing.deviceId,
+              refreshTokenStatus: RefreshTokenStatus.ACTIVE,
+              isActive: true,
+              refreshToken: '',
+              accessToken: ''
+            });
+            await vendorTokenRepo.save(newTokenRow);
+             
+            const newRefreshToken = await generateVendorRefreshToken({ tokenId: newTokenRow.id, userUUId: vendor.uuid, });
+            const newAccessToken = await signVendorAccessToken({ userId: vendor.id, userUUId: vendor.uuid,  tokenId: newTokenRow.id });
+
+            
+            const refreshTokenExpiry = new Date(Date.now() + parseInt(process.env.REFRESH_TOKEN_EXPIRY_DAYS || '60') * 24 * 60 * 60 * 1000);
+            newTokenRow.refreshToken = newRefreshToken;
+            newTokenRow.accessToken = newAccessToken;
+            newTokenRow.refreshTokenExpiry = refreshTokenExpiry;
+            await vendorTokenRepo.save(newTokenRow);
+
+            const result = createSuccessResponse({ accessToken: newAccessToken, refreshToken: newRefreshToken }, 'Tokens refreshed');
+            return reply.status(200).send(result);
+          } catch (error) {
+            throw new APIError(
+              (error as APIError).message,
+              (error as APIError).statusCode || 400,
+              (error as APIError).code || 'TOKEN_REFRESH_FAILED',
+              true,
+              (error as APIError).publicMessage || 'Failed to refresh token. Please login again.'
+            );
+          }
+        },
     };
 }

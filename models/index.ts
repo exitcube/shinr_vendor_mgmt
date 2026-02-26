@@ -4,6 +4,8 @@ import { File } from "./File";
 import { VendorOrganization } from "./VendorOrganization";
 import { VendorOrganizationToken } from "./VendorOrganizationToken";
 import { VendorToken } from "./VendorToken";
+import{ VendorOtp } from "./VendorOtp";
+
 // import { Product } from './Product';
 
 
@@ -14,7 +16,8 @@ export const entities = [
     File,
     VendorOrganization,
     VendorOrganizationToken,
-    VendorToken
+    VendorToken,
+    VendorOtp
     // Product,
 ];
 
@@ -26,3 +29,4 @@ export { File, type File as FileType } from "./File";
 export { VendorOrganization, type VendorOrganization as VendorOrganizationType,} from "./VendorOrganization";
 export { VendorOrganizationToken, type VendorOrganizationToken as VendorOrganizationTokenType,} from "./VendorOrganizationToken";
 export { VendorToken, type VendorToken as VendorTokenType } from "./VendorToken";
+export { VendorOtp, type VendorOtp as VendorOtpType } from "./VendorOtp";

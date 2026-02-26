@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn,Column,CreateDateColumn,UpdateDateColumn,JoinColumn,OneToOne,ManyToOne,Generated,Index} from "typeorm";
+import { Entity, PrimaryGeneratedColumn,Column,CreateDateColumn,UpdateDateColumn,JoinColumn,ManyToOne,Generated,Index} from "typeorm";
 import { Vendor } from "./Vendor";
 
 
@@ -12,7 +12,7 @@ export class VendorToken {
     @Index()
     uuid: string;
 
-    @Column({ name: "userId" })
+    @Column()
     @Index()
     vendorId: number;
   

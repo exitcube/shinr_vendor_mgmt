@@ -1,25 +1,55 @@
+import Joi from "joi";
 
-import Joi from 'joi';
-
-export const registerVendorValidator = {
+export const loginValidate = {
     body: Joi.object({
-        businessName: Joi.string().required(),
-        ownerName: Joi.string().required(),
-        phone: Joi.string().required(),
-        email: Joi.string().email().optional(),
-        password: Joi.string().min(6).required(),
-        location: Joi.object({
-            address: Joi.string().required(),
-            lat: Joi.number().required(),
-            lng: Joi.number().required()
-        }).optional(),
-        serviceType: Joi.array().items(Joi.string()).optional()
-    })
+        mobile: Joi.string()
+            .pattern(/^[0-9]{10}$/)
+            .required()
+            .messages({
+                'string.empty': 'Mobile number is required',
+                'string.pattern.base': 'Mobile number must be 10 digits',
+            }),
+    }),
+    query: Joi.object({}), // empty object schema for query
+};
+export const verifyOtpValidate = {
+    body: Joi.object({
+        otpToken: Joi.string()
+            .required()
+            .messages({
+                'string.empty': 'otp token is required',
+            }),
+        otp: Joi.string()
+            .pattern(/^\d{4}$/) // 4-digit number as string
+            .required()
+            .messages({
+                'string.empty': 'OTP is required',
+                'string.pattern.base': 'OTP must be a 4-digit number',
+            }),
+    }),
+    query: Joi.object({}), // empty object schema for query
 };
 
-export const loginVendorValidator = {
+export const verifyOtpTokenValidate = {
     body: Joi.object({
-        identifier: Joi.string().required(), // phone or email
-        password: Joi.string().required()
-    })
+        otpToken: Joi.string()
+            .required()
+            .messages({
+                'string.empty': 'OTP token is required',
+            }),
+    }),
+    query: Joi.object({}), // empty object schema for query
 };
+
+export const refreshTokenValidate = {
+    body: Joi.object({
+        refreshToken: Joi.string()
+            .required()
+            .messages({
+                'string.empty': 'Refresh token is required',
+            }),
+    }),
+    query: Joi.object({}),
+};
+
+ 

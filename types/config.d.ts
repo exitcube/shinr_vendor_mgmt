@@ -83,7 +83,6 @@ export type adminAccessTokenPayloadType = {
 export type accessTokenPayloadType = {
   userId: number;
   userUUId: string;
-  deviceUUId: string;
   tokenId: number;
 }
 
@@ -101,4 +100,15 @@ export type vendorAccessTokenPayloadType = {
   vendorId: number;
   tokenId: number;
   deviceUUId: string;
+}
+
+export type otpTokenPayloadType = {
+  tokenId: number;
+  userUUId: string;
+}
+
+
+export type refreshTokenPayloadType = {
+  tokenId: number;
+  userUUId: string;
 }
