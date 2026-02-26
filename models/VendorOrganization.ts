@@ -7,7 +7,7 @@ export class VendorOrganization {
     @PrimaryGeneratedColumn()
     id: number;
 
-    @Column({ name: "userId" })
+    @Column({ name: "vendorId" })
     @Index()
     vendorId: number;
   
@@ -25,7 +25,7 @@ export class VendorOrganization {
     password: string;
 
     @Column({ nullable: false })
-    contactMobile: number;
+    mobile: string;
 
     @Column({ nullable: true })
     contactEmail: string;
