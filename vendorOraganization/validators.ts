@@ -18,3 +18,13 @@ export const vendorOrgLoginValidate = {
       }),
   }),
 };
+export const refreshTokenValidate = {
+    body: Joi.object({
+        refreshToken: Joi.string()
+            .required()
+            .messages({
+                'string.empty': 'Refresh token is required',
+            }),
+    }),
+    query: Joi.object({}),
+};
