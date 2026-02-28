@@ -92,29 +92,13 @@ export interface VendorAuthenticatedUser {
   tokenId: number;
 }
 
-export interface VendorOrgAuthenticatedUser {
-  vendorOrganizationId: number;
-  tokenId: number;
-}
-
 export type vendorRefreshTokenPayloadType = {
-  vendorId: number;
+  userUUID: string;
   tokenId: number;
 }
 
 export type vendorAccessTokenPayloadType = {
+  userUUID: string;
   vendorId: number;
   tokenId: number;
-  deviceUUId: string;
-}
-
-export type vendorOrgRefreshTokenPayloadType = {
-  vendorOrganizationId: number;
-  organizationId: string;
-  tokenId: number;
-}
-
-export type vendorOrgAccessTokenPayloadType = {
-    vendorOrganizationId: number;
-    tokenId: number;
 }

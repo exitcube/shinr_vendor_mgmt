@@ -1,144 +1,202 @@
+import {FastifyInstance,FastifyPluginOptions,FastifyRequest,FastifyReply } from "fastify";
+import { APIError } from "../types/errors";
+import { loginVendorBody, refreshRequestBody } from "./type";
+import { Vendor, VendorToken } from "../models";
+import bcrypt from "bcrypt";
+import { RefreshTokenStatus, VendorAccountStatus } from "../utils/constant";
+import { generateVendorRefreshToken, signVendorAccessToken, verifyVendorRefreshToken } from "../utils/jwt";
+import { createSuccessResponse } from "../utils/response";
 
-import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from 'fastify';
+export default function controller(fastify: FastifyInstance,opts: FastifyPluginOptions,): any {
+  return {
+    loginVendorHandler: async (request: FastifyRequest<{ Body: loginVendorBody }>,reply: FastifyReply,) => {
+      try {
+        const { vendorCode, password } = request.body;
+        const VendorRepo = fastify.db.getRepository(Vendor);
+        const VendorTokenRepo = fastify.db.getRepository(VendorToken);
 
-export default function controller(fastify: FastifyInstance, opts: FastifyPluginOptions): any {
-    return {
-        // registerVendorHandler: async (request: FastifyRequest<{ Body: registerVendorBody }>, reply: FastifyReply) => {
-        //     try {
-        //         const { businessName, ownerName, phone, email, password, location, serviceType } = request.body;
-        //         const vendorRepo = fastify.db.getRepository(Vendor);
+        const existingVendor = await VendorRepo.findOne({
+          where: { vendorCode: vendorCode,isActive: true }
+        });
 
-        //         const existingVendor = await vendorRepo.findOne({ where: [{ phone }, { email: email || "" }] });
-        //         if (existingVendor) {
-        //             throw new APIError("Vendor already exists", 400, "VENDOR_EXISTS", true, "Vendor with this phone or email already exists");
-        //         }
+        if (!existingVendor) {
+          throw new APIError(
+            "Vendor not found.",
+            404,
+            "VENDOR_NOT_FOUND",
+            true,
+            "Vendor not found.",
+          );
+        }
+        if (existingVendor.accountStatus === "BLOCKED") {
+          throw new APIError(
+            "Vendor account is blocked.",
+            403,
+            "VENDOR_ACCOUNT_BLOCKED",
+            true,
+            "Your account is currently blocked. Please contact support for more information.",
+          );
+        }
 
-        //         const hashedPassword = await bcrypt.hash(password, 10);
-        //         const newVendor = vendorRepo.create({
-        //             businessName,
-        //             ownerName,
-        //             phone,
-        //             email,
-        //             password: hashedPassword,
-        //             location,
-        //             serviceType,
-        //             isActive: true
-        //         });
+        const isPasswordValid = await bcrypt.compare(
+          password,
+          existingVendor.password,
+        );
 
-        //         await vendorRepo.save(newVendor);
+        if (!isPasswordValid) {
+          throw new APIError(
+            "Invalid password.",
+            401,
+            "INVALID_PASSWORD",
+            true,
+            "Invalid password.",
+          );
+        }
+        await VendorRepo.update(
+          { vendorCode: vendorCode },
+          { isActive: true },
+        );
 
-        //         return reply.status(201).send(createSuccessResponse({ vendorId: newVendor.id }, "Vendor registered successfully"));
+        const vendorToken = await VendorTokenRepo.create({
+          vendorId : existingVendor.id,
+          refreshTokenStatus: RefreshTokenStatus.ACTIVE,
+          isActive: true,
+          refreshToken: "",
+          accessToken: "",
+        });
+        await VendorTokenRepo.save(vendorToken);
+        const refreshToken = await generateVendorRefreshToken({
+          userUUID: existingVendor.uuid,
+          tokenId: vendorToken.id,
+        });
+        const accessToken = await signVendorAccessToken({
+          userUUID: existingVendor.uuid,
+          vendorId: existingVendor.id,
+          tokenId: vendorToken.id,
+        });
+        const refreshTokenExpiry = new Date(
+          Date.now() +
+            parseInt(process.env.REFRESH_TOKEN_EXPIRY_DAYS || "60") *
+              24 *
+              60 *
+              60 *
+              1000,
+        );
+        vendorToken.refreshToken = refreshToken;
+        vendorToken.accessToken = accessToken;
+        vendorToken.refreshTokenExpiry = refreshTokenExpiry;
+        await VendorTokenRepo.save(vendorToken);
+        return reply
+          .status(200)
+          .send(
+            createSuccessResponse({ accessToken, refreshToken },"Login Successfull"),
+          );
+      } catch (error) {
+        throw new APIError(
+          (error as APIError).message,
+          (error as APIError).statusCode || 400,
+          (error as APIError).code || "LOGIN_FAILED",
+          true,
+          (error as APIError).publicMessage || "Login failed.",
+        );
+      }
+    },
+    refreshTokenHandler: async (
+          request: FastifyRequest<{ Body: refreshRequestBody }>,
+          reply: FastifyReply
+        ) => {
+          try {
+            const { refreshToken } = request.body as refreshRequestBody;
 
-        //     } catch (error) {
-        //         throw new APIError(
-        //             (error as APIError).message,
-        //             (error as APIError).statusCode || 400,
-        //             (error as APIError).code || "REGISTER_FAILED",
-        //             true,
-        //             (error as APIError).publicMessage || "Failed to register vendor."
-        //         );
-        //     }
-        // },
+            const VendorTokenRepo = fastify.db.getRepository(VendorToken)
+            const VendorRepo = fastify.db.getRepository(Vendor)
 
-        // loginVendorHandler: async (request: FastifyRequest<{ Body: loginVendorBody }>, reply: FastifyReply) => {
-        //     try {
-        //         const { identifier, password } = request.body;
-        //         const deviceId = request.headers['x-device-id'] as string; // Expect device ID in header
+            const payload: any = await verifyVendorRefreshToken(refreshToken);
+            const { userUUID, tokenId } = payload;
 
-        //         if (!deviceId) {
-        //             throw new APIError("Device ID missing", 400, "MISSING_DEVICE_ID", true, "x-device-id header is required");
-        //         }
+            const vendor = await VendorRepo.findOne({
+              where: { uuid: userUUID, isActive: true },
+            });
+            if (!vendor) {
+              throw new APIError(
+                "Vendor not found.",
+                404,
+                "VENDOR_NOT_FOUND",
+                true,
+                "Vendor not found.",
+              );
+            }
 
-        //         const vendorRepo = fastify.db.getRepository(Vendor);
-        //         const tokenRepo = fastify.db.getRepository(VendorToken);
-        //         const deviceRepo = fastify.db.getRepository(VendorDevice);
+            const existingVendorToken = await VendorTokenRepo.findOne({
+              where: { id: tokenId },
+            });
+            if (!existingVendorToken) {
+              throw new APIError(
+                "Invalid refresh token.",
+                401,
+                "INVALID_REFRESH_TOKEN",
+                true,
+                "Invalid refresh token.",
+              );
+            }
+            if(existingVendorToken.refreshToken !== refreshToken){
+              throw new APIError(
+                "Refresh token mismatch.",
+                401,
+                "REFRESH_TOKEN_MISMATCH",
+                true,
+                "Provided refresh token does not match.",
+              );
+            }
+            if(existingVendorToken.refreshTokenStatus !== RefreshTokenStatus.ACTIVE){
+                await VendorTokenRepo.update({id: existingVendorToken.id}, {refreshTokenStatus: RefreshTokenStatus.REVOKED});
+                throw new APIError(
+                  "Refresh token invalid state.",
+                  401,
+                  "REFRESH_TOKEN_INVALID_STATE",
+                  true,
+                  "Refresh token invalid state.",
+                );
+            }
+            existingVendorToken.isActive = false;
+            existingVendorToken.refreshTokenStatus = RefreshTokenStatus.USED
+            await VendorTokenRepo.save(existingVendorToken);
 
-        //         const vendor = await vendorRepo.findOne({
-        //             where: [
-        //                 { phone: identifier },
-        //                 { email: identifier }
-        //             ],
-        //             relations: ['device']
-        //         });
+            const newTokenRow = await VendorTokenRepo.create({
+                vendorId: vendor.id,
+                refreshTokenStatus: RefreshTokenStatus.ACTIVE,
+                isActive: true,
+                refreshToken: "",
+                accessToken: "",
+            })
+            await VendorTokenRepo.save(newTokenRow);
 
-        //         if (!vendor) {
-        //             throw new APIError("Vendor not found", 400, "VENDOR_NOT_FOUND", false, "Invalid credentials");
-        //         }
+            const newRefreshToken = await generateVendorRefreshToken({
+                userUUID: vendor.uuid,
+                tokenId: newTokenRow.id,
+            })
+            const newAccessToken = await signVendorAccessToken({
+                userUUID: vendor.uuid,
+                vendorId: vendor.id,
+                tokenId: newTokenRow.id,
+            })
+            const refreshTokenExpiry = new Date(Date.now() + parseInt(process.env.REFRESH_TOKEN_EXPIRY_DAYS || '60') * 24 * 60 * 60 * 1000);
+            newTokenRow.refreshToken = newRefreshToken;
+            newTokenRow.accessToken = newAccessToken;
+            newTokenRow.refreshTokenExpiry = refreshTokenExpiry;
+            await VendorTokenRepo.save(newTokenRow);
 
-        //         const isPasswordValid = await bcrypt.compare(password, vendor.password);
-        //         if (!isPasswordValid) {
-        //             throw new APIError("Invalid password", 401, "INVALID_PASSWORD", false, "Invalid credentials");
-        //         }
+            return reply.status(200).send(createSuccessResponse({ accessToken: newAccessToken, refreshToken: newRefreshToken }, "Token refreshed successfully."));
 
-        //         // Device Logic
-        //         let vendorDevice = await deviceRepo.findOne({ where: { vendorId: vendor.id } });
-
-        //         // If device exists but UUID mismatch? Or just update it?
-        //         // For simplicity, we create one if not exists, or update.
-        //         // Or if we strictly follow uuid flow:
-
-        //         if (!vendorDevice) {
-        //             vendorDevice = deviceRepo.create({
-        //                 vendorId: vendor.id,
-        //                 deviceId: deviceId, // This might be a physical device ID or similar
-        //                 isActive: true,
-        //                 lastLogin: new Date(),
-        //                 lastActive: new Date(),
-        //                 // uuid is auto-generated
-        //             });
-        //             await deviceRepo.save(vendorDevice);
-
-        //             // We need the generated UUID for the token
-        //             // But wait, vendorDevice.uuid is generated on insert.
-        //         } else {
-        //             vendorDevice.lastLogin = new Date();
-        //             vendorDevice.lastActive = new Date();
-        //             vendorDevice.deviceId = deviceId; // Update physical device ID mapping
-        //             await deviceRepo.save(vendorDevice);
-        //         }
-
-        //         const vendorToken = tokenRepo.create({
-        //             vendorId: vendor.id,
-        //             refreshTokenStatus: RefreshTokenStatus.ACTIVE,
-        //             isActive: true,
-        //             refreshToken: "",
-        //             accessToken: "",
-        //         });
-        //         await tokenRepo.save(vendorToken);
-
-        //         const refreshToken = await generateVendorRefreshToken({
-        //             vendorId: vendor.id,
-        //             tokenId: vendorToken.id,
-        //         });
-
-        //         const accessToken = await signVendorAccessToken({
-        //             vendorId: vendor.id,
-        //             tokenId: vendorToken.id,
-        //             deviceUUId: vendorDevice.uuid // Use the VendorDevice UUID
-        //         });
-
-        //         const refreshTokenExpiry = new Date(
-        //             Date.now() +
-        //             parseInt(process.env.REFRESH_TOKEN_EXPIRY_DAYS || "60") *
-        //             24 * 60 * 60 * 1000
-        //         );
-
-        //         vendorToken.refreshToken = refreshToken;
-        //         vendorToken.accessToken = accessToken;
-        //         vendorToken.refreshTokenExpiry = refreshTokenExpiry;
-        //         await tokenRepo.save(vendorToken);
-
-        //         return reply.status(200).send(createSuccessResponse({ accessToken, refreshToken, vendor, deviceUUId: vendorDevice.uuid }, "Login successful"));
-
-        //     } catch (error) {
-        //         throw new APIError(
-        //             (error as APIError).message,
-        //             (error as APIError).statusCode || 400,
-        //             (error as APIError).code || "LOGIN_FAILED",
-        //             true,
-        //             (error as APIError).publicMessage || "Login failed."
-        //         );
-        //     }
-        // }
-    };
+          }catch (error) {
+        throw new APIError(
+              (error as APIError).message,
+              (error as APIError).statusCode || 400,
+              (error as APIError).code || 'TOKEN_REFRESH_FAILED',
+              true,
+              (error as APIError).publicMessage || 'Failed to refresh token. Please login again.'
+        );
+      }
+    },
+  };
 }

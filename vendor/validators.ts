@@ -1,25 +1,30 @@
+import Joi from "joi";
 
-import Joi from 'joi';
 
-export const registerVendorValidator = {
-    body: Joi.object({
-        businessName: Joi.string().required(),
-        ownerName: Joi.string().required(),
-        phone: Joi.string().required(),
-        email: Joi.string().email().optional(),
-        password: Joi.string().min(6).required(),
-        location: Joi.object({
-            address: Joi.string().required(),
-            lat: Joi.number().required(),
-            lng: Joi.number().required()
-        }).optional(),
-        serviceType: Joi.array().items(Joi.string()).optional()
-    })
+export const vendorLoginValidate = {
+  body: Joi.object({
+    vendorCode: Joi.string()
+      .required()
+      .messages({
+        "string.empty": "vendorCode is required",
+        "any.required": "vendorCode is required",
+      }),
+
+    password: Joi.string()
+      .required()
+      .messages({
+        "string.empty": "Password is required",
+        "any.required": "Password is required",
+      }),
+  }),
 };
-
-export const loginVendorValidator = {
+export const refreshTokenValidate = {
     body: Joi.object({
-        identifier: Joi.string().required(), // phone or email
-        password: Joi.string().required()
-    })
+        refreshToken: Joi.string()
+            .required()
+            .messages({
+                'string.empty': 'Refresh token is required',
+            }),
+    }),
+    query: Joi.object({}),
 };

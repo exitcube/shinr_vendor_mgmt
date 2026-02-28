@@ -12,7 +12,7 @@ export class VendorToken {
     @Index()
     uuid: string;
 
-    @Column({ name: "userId" })
+    @Column()
     @Index()
     vendorId: number;
   
