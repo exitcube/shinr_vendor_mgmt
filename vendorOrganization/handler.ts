@@ -1,11 +1,11 @@
 
 import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from 'fastify';
 import { LoginRequestBody, refreshRequestBody, verifyOtpRequestBody } from './type';
-import { Vendor, VendorToken } from '../models';
-import { VendorOtp } from '../models/VendorOtp';
+import { VendorOrganization, VendorOrganizationToken } from '../models';
+import { VendorOrgOtp } from '../models/VendorOrgOtp';
 import { APIError } from '../types/errors';
 import { generateOtp } from '../utils/helper';
-import { generateVendorOtpToken, generateVendorRefreshToken, signVendorAccessToken, verifyVendorOtpToken, verifyVendorRefreshToken } from '../utils/jwt';
+import { generateVendorOrgOtpToken, generateVendorOrgRefreshToken, signVendorOrgAccessToken, verifyVendorOrgOtpToken, verifyVendorOrgRefreshToken } from '../utils/jwt';
 import { createSuccessResponse } from '../utils/response';
 import { RefreshTokenStatus } from '../utils/constant';
  
@@ -17,13 +17,12 @@ export default function controller(fastify: FastifyInstance, opts: FastifyPlugin
                 const { mobile } = request.body;
 
              
-                const vendorRepo = fastify.db.getRepository(Vendor);;
-                const vendorOtpRepo = fastify.db.getRepository(VendorOtp);
-                const vendorTokenRepo = fastify.db.getRepository(VendorToken);
+                const vendorOrgRepo = fastify.db.getRepository(VendorOrganization);;
+                const vendorOrgOtpRepo = fastify.db.getRepository(VendorOrgOtp);
 
 
-                let vendor = await vendorRepo.findOne({ where: { mobile, isActive: true } });
-                 if (!vendor) {
+                let vendorOrg = await vendorOrgRepo.findOne({ where: { mobile, isActive: true } });
+                 if (!vendorOrg) {
                      throw new APIError(
                         "Invalid mobile number",
                         400,
@@ -32,31 +31,41 @@ export default function controller(fastify: FastifyInstance, opts: FastifyPlugin
                         "The mobile number provided is not registered with us."
                     );
                  }
+                 if(vendorOrg.accountStatus === "BLOCKED"){
+                    throw new APIError(
+                        "Account blocked",
+                        403,
+                        "ACCOUNT_BLOCKED",
+                        false,
+                        "Your account has been blocked. Please contact support for assistance."
+                    );
+                 }
 
-
-                vendor.lastActive = new Date();
+                vendorOrg.lastActive = new Date();
+                await vendorOrgRepo.save(vendorOrg);
                 const otp = generateOtp();
-                const vendorOtp = vendorOtpRepo.create({
-                    vendorId: vendor.id,
+                const vendorOrgOtp = vendorOrgOtpRepo.create({
+                    vendorOrgId: vendorOrg.id,
                     otp,
                     lastRequestedTime: new Date(),
                     requestCount: 1,
                     otpToken: ""
                 });
-                 await vendorOtpRepo.save(vendorOtp);
-                const otpToken = await generateVendorOtpToken({
+                 await vendorOrgOtpRepo.save(vendorOrgOtp);
+                const otpToken = await generateVendorOrgOtpToken({
                     // userId: user.id,
-                    tokenId: vendorOtp.id,
-                    userUUId: vendor.uuid,
+                    tokenId: vendorOrgOtp.id,
+                    userUUId: vendorOrg.uuid,
                     
                 });
-                vendorOtp.otpToken = otpToken;
-                await vendorOtpRepo.save(vendorOtp);
+                vendorOrgOtp.otpToken = otpToken;
+                await vendorOrgOtpRepo.save(vendorOrgOtp);
 
                 const result = createSuccessResponse({ otpToken }, "OTP generated");
                 return reply.status(200).send(result);
 
             } catch (error) {
+                if (error instanceof APIError) throw error;
                 throw new APIError(
                     (error as APIError).message,
                     500,
@@ -70,19 +79,19 @@ export default function controller(fastify: FastifyInstance, opts: FastifyPlugin
             try {
                 const { otpToken, otp } = request.body;
                
-                const vendorRepo = fastify.db.getRepository(Vendor);
-                const vendorOtpRepo = fastify.db.getRepository(VendorOtp);
-                const vendorTokenRepo = fastify.db.getRepository(VendorToken);
+                const vendorOrgRepo = fastify.db.getRepository(VendorOrganization);
+                const vendorOrgOtpRepo = fastify.db.getRepository(VendorOrgOtp);
+                const vendorOrgTokenRepo = fastify.db.getRepository(VendorOrganizationToken);
                 
 
                 
-                const payload = await verifyVendorOtpToken(otpToken);
+                const payload = await verifyVendorOrgOtpToken(otpToken);
                 console.log("payload", payload);
                 
-                const vendor = await vendorRepo.findOne({
+                const vendorOrg = await vendorOrgRepo.findOne({
                     where: { uuid: payload.userUUId, isActive: true },
                 });
-                if (!vendor) {
+                if (!vendorOrg) {
                     throw new APIError(
                         "User not found",
                         400,
@@ -91,8 +100,8 @@ export default function controller(fastify: FastifyInstance, opts: FastifyPlugin
                         "User does not exist. Please register."
                     );
                 }
-                const otpRecord = await vendorOtpRepo.findOne({
-                    where: { id :payload.tokenId, vendorId: vendor.id,  isActive: true },
+                const otpRecord = await vendorOrgOtpRepo.findOne({
+                    where: { id :payload.tokenId, vendorOrgId: vendorOrg.id,  isActive: true },
                 });
 
                 if (otpRecord?.otpToken !== otpToken) {
@@ -114,33 +123,33 @@ export default function controller(fastify: FastifyInstance, opts: FastifyPlugin
                         "The provided OTP is invalid. Please request a new OTP."
                     );
                 }
-                await vendorTokenRepo.update(
-                    { vendorId: vendor.id,   isActive: true }, // condition
+                await vendorOrgTokenRepo.update(
+                    { vendorOrganizationId: vendorOrg.id,   isActive: true }, // condition
                     {
                         isActive: false,
                         refreshTokenStatus: RefreshTokenStatus.INACTIVE
                     } 
                 );
-                const vendorToken = vendorTokenRepo.create({
-                    vendorId: vendor.id,
+                const vendorOrgToken = vendorOrgTokenRepo.create({
+                    vendorOrganizationId: vendorOrg.id,
                     refreshTokenStatus: RefreshTokenStatus.ACTIVE,
                     isActive: true,
                     refreshToken: "",
                     accessToken: ""
                 });
 
-                await vendorTokenRepo.save(vendorToken);
+                await vendorOrgTokenRepo.save(vendorOrgToken);
 
-                const refreshToken = await generateVendorRefreshToken({ userUUId: vendor.uuid,   tokenId: vendorToken.id });
-                const accessToken = await signVendorAccessToken({ userId: vendor.id, userUUId: vendor.uuid,  tokenId: vendorToken.id});
+                const refreshToken = await generateVendorOrgRefreshToken({ userUUId: vendorOrg.uuid,   tokenId: vendorOrgToken.id,vendorOrgId: vendorOrg.id });
+                const accessToken = await signVendorOrgAccessToken({ vendorOrgId: vendorOrg.id, userUUId: vendorOrg.uuid,  tokenId: vendorOrgToken.id});
                 console.log(refreshToken, accessToken);
                 const refreshTokenExpiry = new Date(Date.now() + parseInt(process.env.REFRESH_TOKEN_EXPIRY_DAYS || "60") * 24 * 60 * 60 * 1000);
-                vendorToken.refreshToken = refreshToken;
-                vendorToken.accessToken = accessToken;
-                vendorToken.refreshTokenExpiry = refreshTokenExpiry;
-                await vendorTokenRepo.save(vendorToken);
+                vendorOrgToken.refreshToken = refreshToken;
+                vendorOrgToken.accessToken = accessToken;
+                vendorOrgToken.refreshTokenExpiry = refreshTokenExpiry;
+                await vendorOrgTokenRepo.save(vendorOrgToken);
                 otpRecord.isActive = false;
-                await vendorOtpRepo.save(otpRecord);
+                await vendorOrgOtpRepo.save(otpRecord);
                 const result = createSuccessResponse({ accessToken, refreshToken }, "OTP verified and tokens generated");
                 return reply.status(200).send(result);
 
@@ -161,13 +170,13 @@ export default function controller(fastify: FastifyInstance, opts: FastifyPlugin
             const { otpToken } = request.body;
              
             
-            const vendorOtpRepo = fastify.db.getRepository(VendorOtp);
+            const vendorOrgOtpRepo = fastify.db.getRepository(VendorOrgOtp);
     
-            const payload = await verifyVendorOtpToken(otpToken);
+            const payload = await verifyVendorOrgOtpToken(otpToken);
             const { userUUId,tokenId } = payload;
     
         
-            const otpRecord = await vendorOtpRepo.findOne({
+            const otpRecord = await vendorOrgOtpRepo.findOne({
               where: { id:tokenId, isActive: true },
             });
     
@@ -182,7 +191,7 @@ export default function controller(fastify: FastifyInstance, opts: FastifyPlugin
             }     
             if (otpRecord.requestCount > 5) {
               otpRecord.isActive = false;
-              await vendorOtpRepo.save(otpRecord);
+              await vendorOrgOtpRepo.save(otpRecord);
               throw new APIError(
                 "OTP limit exceeded",
                 429,
@@ -204,14 +213,14 @@ export default function controller(fastify: FastifyInstance, opts: FastifyPlugin
             }
           
             const newOtp = generateOtp();
-            const newOtpToken = await generateVendorOtpToken({tokenId,userUUId});
+            const newOtpToken = await generateVendorOrgOtpToken({tokenId,userUUId});
 
               otpRecord.otp = newOtp;
               otpRecord.otpToken = newOtpToken;
               otpRecord.lastRequestedTime = new Date();
               otpRecord.requestCount += 1;
     
-            await vendorOtpRepo.save(otpRecord);
+            await vendorOrgOtpRepo.save(otpRecord);
     
             const result = createSuccessResponse(
               { otpToken: otpRecord.otpToken },
@@ -233,18 +242,18 @@ export default function controller(fastify: FastifyInstance, opts: FastifyPlugin
           try {
             const { refreshToken } = request.body;
 
-            const vendorTokenRepo = fastify.db.getRepository(VendorToken);
-            const vendorRepo = fastify.db.getRepository(Vendor);
+            const vendorOrgTokenRepo = fastify.db.getRepository(VendorOrganizationToken);
+            const vendorOrgRepo = fastify.db.getRepository(VendorOrganization);
 
-            const payload: any = await verifyVendorRefreshToken(refreshToken);
+            const payload: any = await verifyVendorOrgRefreshToken(refreshToken);
             const { userUUId,  tokenId } = payload;
 
-            const vendor = await vendorRepo.findOne({ where: { uuid: userUUId, isActive: true } });
-            if (!vendor) {
+            const vendorOrg = await vendorOrgRepo.findOne({ where: { uuid: userUUId, isActive: true } });
+            if (!vendorOrg) {
               throw new APIError('User not found', 404, 'USER_NOT_FOUND', false, 'The user associated with this token does not exist.');
             }
 
-            const existing = await vendorTokenRepo.findOne({ where: { id: tokenId, } });
+            const existing = await vendorOrgTokenRepo.findOne({ where: { id: tokenId, } });
             if (!existing) {
               throw new APIError('Refresh token not found', 400, 'REFRESH_TOKEN_NOT_FOUND', false, 'Invalid or inactive refresh token.');
             }
@@ -254,35 +263,35 @@ export default function controller(fastify: FastifyInstance, opts: FastifyPlugin
             }
 
             if (existing.refreshTokenStatus !== RefreshTokenStatus.ACTIVE) {
-              await vendorTokenRepo.update( { id: existing.id },{ refreshTokenStatus: RefreshTokenStatus.REVOKED });
+              await vendorOrgTokenRepo.update( { id: existing.id },{ refreshTokenStatus: RefreshTokenStatus.REVOKED });
               throw new APIError('Refresh token invalid state', 400, 'REFRESH_TOKEN_INVALID_STATE', false, 'Refresh token is not active.');
             }
 
 
             existing.isActive = false;
             existing.refreshTokenStatus = RefreshTokenStatus.USED;
-            await vendorTokenRepo.save(existing);
+            await vendorOrgTokenRepo.save(existing);
 
           
-            const newTokenRow = vendorTokenRepo.create({
-              vendorId: vendor.id,
+            const newTokenRow = vendorOrgTokenRepo.create({
+              vendorOrganizationId: vendorOrg.id,
               deviceId: existing.deviceId,
               refreshTokenStatus: RefreshTokenStatus.ACTIVE,
               isActive: true,
               refreshToken: '',
               accessToken: ''
             });
-            await vendorTokenRepo.save(newTokenRow);
+            await vendorOrgTokenRepo.save(newTokenRow);
              
-            const newRefreshToken = await generateVendorRefreshToken({ tokenId: newTokenRow.id, userUUId: vendor.uuid, });
-            const newAccessToken = await signVendorAccessToken({ userId: vendor.id, userUUId: vendor.uuid,  tokenId: newTokenRow.id });
+            const newRefreshToken = await generateVendorOrgRefreshToken({ tokenId: newTokenRow.id, userUUId: vendorOrg.uuid,vendorOrgId: vendorOrg.id });
+            const newAccessToken = await signVendorOrgAccessToken({ vendorOrgId: vendorOrg.id, userUUId: vendorOrg.uuid,  tokenId: newTokenRow.id });
 
             
             const refreshTokenExpiry = new Date(Date.now() + parseInt(process.env.REFRESH_TOKEN_EXPIRY_DAYS || '60') * 24 * 60 * 60 * 1000);
             newTokenRow.refreshToken = newRefreshToken;
             newTokenRow.accessToken = newAccessToken;
             newTokenRow.refreshTokenExpiry = refreshTokenExpiry;
-            await vendorTokenRepo.save(newTokenRow);
+            await vendorOrgTokenRepo.save(newTokenRow);
 
             const result = createSuccessResponse({ accessToken: newAccessToken, refreshToken: newRefreshToken }, 'Tokens refreshed');
             return reply.status(200).send(result);

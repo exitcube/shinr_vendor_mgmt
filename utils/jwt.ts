@@ -1,11 +1,11 @@
 import { SignJWT, jwtVerify } from "jose";
 import { randomUUID } from "crypto";
-import { accessTokenPayloadType, otpTokenPayloadType, refreshTokenPayloadType } from "../types/config";
+import { vendorOrgAccessTokenPayloadType, vendorOrgOtpTokenPayloadType, vendorOrgRefreshTokenPayloadType } from "../types/config";
 const OTP_SECRET = new TextEncoder().encode(process.env.OTP_SECRET || "otptokensceret");
 const REFRESH_TOKEN_SECRET = new TextEncoder().encode(process.env.REFRESH_TOKEN_SECRET || "refreshtokensecret");
 const ACCESS_TOKEN_SECRET = new TextEncoder().encode(process.env.ACCESS_TOKEN_SECRET || "accesstokensecret");
 const REFRESH_TOKEN_EXPIRY_DAYS = process.env.REFRESH_TOKEN_EXPIRY_DAYS ? parseInt(process.env.REFRESH_TOKEN_EXPIRY_DAYS) : 60;
-export async function generateVendorOtpToken(payload : otpTokenPayloadType) {
+export async function generateVendorOrgOtpToken(payload : vendorOrgOtpTokenPayloadType) {
   return await new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
     .setJti(randomUUID())
@@ -14,12 +14,12 @@ export async function generateVendorOtpToken(payload : otpTokenPayloadType) {
     .sign(OTP_SECRET);
 }
 
-export async function verifyVendorOtpToken(token: string) {
+export async function verifyVendorOrgOtpToken(token: string) {
   const { payload } = await jwtVerify(token, OTP_SECRET, { algorithms: ["HS256"] });
   return payload as { tokenId : number,userId: number; userUUId: string;  jti: string };
 }
 
-export async function generateVendorRefreshToken(payload : refreshTokenPayloadType) {
+export async function generateVendorOrgRefreshToken(payload : vendorOrgRefreshTokenPayloadType) {
   return await new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
     .setJti(randomUUID())
@@ -28,9 +28,9 @@ export async function generateVendorRefreshToken(payload : refreshTokenPayloadTy
     .sign(REFRESH_TOKEN_SECRET);
 }
 
-export async function verifyVendorRefreshToken(token: string) {
+export async function verifyVendorOrgRefreshToken(token: string) {
   const { payload } = await jwtVerify(token, REFRESH_TOKEN_SECRET, { algorithms: ["HS256"] });
-  return payload as { tokenId : number,userId: number; userUUId: string;  jti: string };
+  return payload as { tokenId : number,vendorOrgId: number; userUUId: string;  jti: string };
 }
 
 // This handles the public and private key concept 
@@ -57,7 +57,7 @@ export async function verifyVendorRefreshToken(token: string) {
 // })();
 // End of public and private key concept
 
-export async function signVendorAccessToken(payload : accessTokenPayloadType) {
+export async function signVendorOrgAccessToken(payload : vendorOrgAccessTokenPayloadType) {
   const jti = randomUUID();
 
   return new SignJWT(payload)
@@ -69,7 +69,7 @@ export async function signVendorAccessToken(payload : accessTokenPayloadType) {
 }
 
 
-export async function verifyVendorAccessToken(token: string) {
+export async function verifyVendorOrgAccessToken(token: string) {
   const { payload } = await jwtVerify(token, ACCESS_TOKEN_SECRET, { algorithms: ["HS256"] });
-  return payload as { userId: number; userUUId: string;  jti: string; tokenId: number};
+  return payload as { vendorOrgId: number; userUUId: string;  jti: string; tokenId: number};
 }

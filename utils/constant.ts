@@ -4,3 +4,8 @@ export enum RefreshTokenStatus {
     REVOKED = 'REVOKED',
     INACTIVE = 'INACTIVE'
 }
+
+export const VendorOrgAccountStatus = {
+    ACTIVE: 'ACTIVE',
+    BLOCKED: 'BLOCKED',
+}

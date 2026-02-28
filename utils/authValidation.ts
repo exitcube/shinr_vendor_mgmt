@@ -1,33 +1,18 @@
 
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { verifyVendorAccessToken} from './jwt';
+import { verifyVendorOrgAccessToken} from './jwt';
 import { createErrorResponse } from './response';
-import { vendorAccessTokenPayloadType, AuthenticatedUser, adminAccessTokenPayloadType, AdminAuthenticatedUser, VendorAuthenticatedUser } from '../types/config';
+import { vendorOrgAccessTokenPayloadType, AuthenticatedUser, adminAccessTokenPayloadType, AdminAuthenticatedUser, VendorOrgAuthenticatedUser } from '../types/config';
 
 /**
  * PreHandler to validate JWT token and x-device-id header
  */
-export async function authValidationPreHandler(
+export async function vendorOrgAuthValidationPreHandler(
     request: FastifyRequest,
     reply: FastifyReply
 ): Promise<void> {
     try {
-        // Check for x-device-id header
-        const deviceId = request.headers['x-device-id'];
-        if (!deviceId) {
-            const errorResponse = createErrorResponse({
-                message: 'Device ID is required',
-                code: 'MISSING_DEVICE_ID',
-                statusCode: 401,
-                timestamp: new Date().toISOString(),
-                path: request.url,
-                method: request.method
-            }, 'x-device-id header is missing');
-
-            return reply.status(401).send(errorResponse);
-        }
-
-        // Check for Authorization header
+        
         const authHeader = request.headers.authorization;
         if (!authHeader) {
             const errorResponse = createErrorResponse({
@@ -63,7 +48,7 @@ export async function authValidationPreHandler(
         // Verify the JWT token
         try {
             // Using verifyVendorAccessToken and typing it with deviceUUId included
-            const payload = await verifyVendorAccessToken(token) as { userId: number; tokenId: number; jti: string;   };
+            const payload = await verifyVendorOrgAccessToken(token) as { vendorOrgId: number; tokenId: number; jti: string;   };
 
             // Verify that the device-id in header matches the device in token
             // Note: The deviceId in header is likely the UUID in this context if we enforce UUID everywhere, 
@@ -72,8 +57,8 @@ export async function authValidationPreHandler(
 
 
             // Attach user info to request for use in handlers
-            const userInfo: VendorAuthenticatedUser = {
-                vendorId: payload.userId,
+            const userInfo: VendorOrgAuthenticatedUser = {
+                vendorOrgId: payload.vendorOrgId,
                 tokenId: payload.tokenId,
             };
             (request as any).user = userInfo;

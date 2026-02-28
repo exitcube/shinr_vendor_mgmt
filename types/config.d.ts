@@ -80,35 +80,29 @@ export type adminAccessTokenPayloadType = {
   role: string;
 }
 
-export type accessTokenPayloadType = {
-  userId: number;
+ 
+
+export interface VendorOrgAuthenticatedUser {
+  vendorOrgId: number;
+  tokenId: number;
+}
+
+export type vendorOrgRefreshTokenPayloadType = {
   userUUId: string;
+  vendorOrgId: number;
   tokenId: number;
 }
 
-export interface VendorAuthenticatedUser {
-  vendorId: number;
+export type vendorOrgAccessTokenPayloadType = {
+  vendorOrgId: number;
   tokenId: number;
+  userUUId: string;
+
 }
 
-export type vendorRefreshTokenPayloadType = {
-  vendorId: number;
-  tokenId: number;
-}
-
-export type vendorAccessTokenPayloadType = {
-  vendorId: number;
-  tokenId: number;
-  deviceUUId: string;
-}
-
-export type otpTokenPayloadType = {
+export type vendorOrgOtpTokenPayloadType = {
   tokenId: number;
   userUUId: string;
 }
 
-
-export type refreshTokenPayloadType = {
-  tokenId: number;
-  userUUId: string;
-}
+ 
