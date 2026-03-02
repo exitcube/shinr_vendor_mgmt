@@ -1,6 +1,6 @@
 import { SignJWT, jwtVerify } from "jose";
 import { randomUUID } from "crypto";
-import { vendorOrgAccessTokenPayloadType, vendorOrgOtpTokenPayloadType, vendorOrgRefreshTokenPayloadType } from "../types/config";
+import { vendorAccessTokenPayloadType, vendorOrgAccessTokenPayloadType, vendorOrgOtpTokenPayloadType, vendorOrgRefreshTokenPayloadType, vendorRefreshTokenPayloadType } from "../types/config";
 const OTP_SECRET = new TextEncoder().encode(process.env.OTP_SECRET || "otptokensceret");
 const REFRESH_TOKEN_SECRET = new TextEncoder().encode(process.env.REFRESH_TOKEN_SECRET || "refreshtokensecret");
 const ACCESS_TOKEN_SECRET = new TextEncoder().encode(process.env.ACCESS_TOKEN_SECRET || "accesstokensecret");
@@ -72,4 +72,33 @@ export async function signVendorOrgAccessToken(payload : vendorOrgAccessTokenPay
 export async function verifyVendorOrgAccessToken(token: string) {
   const { payload } = await jwtVerify(token, ACCESS_TOKEN_SECRET, { algorithms: ["HS256"] });
   return payload as { vendorOrgId: number; userUUId: string;  jti: string; tokenId: number};
+}
+
+
+export async function generateVendorRefreshToken(payload : vendorRefreshTokenPayloadType) {
+  return await new SignJWT(payload)
+    .setProtectedHeader({ alg: "HS256" })
+    .setJti(randomUUID())
+    .setIssuedAt()
+    .setExpirationTime(`${REFRESH_TOKEN_EXPIRY_DAYS}d`)
+    .sign(REFRESH_TOKEN_SECRET);
+}
+
+export async function signVendorAccessToken(payload : vendorAccessTokenPayloadType) {
+  const jti = randomUUID();
+  return new SignJWT(payload)
+    .setProtectedHeader({ alg: "HS256" })
+    .setJti(jti)
+    .setIssuedAt()
+    .setExpirationTime("15m") 
+    .sign(ACCESS_TOKEN_SECRET);
+}
+export async function verifyVendorRefreshToken(token: string) {
+  const { payload } = await jwtVerify(token, REFRESH_TOKEN_SECRET, { algorithms: ["HS256"] });
+  return payload as { vendorId: number; userUUID: string; tokenId: number; jti: string };
+}
+
+export async function verifyVendorAccessToken(token: string) {
+  const { payload } = await jwtVerify(token, ACCESS_TOKEN_SECRET, { algorithms: ["HS256"] });
+  return payload as { vendorId: number; userUUID: string; tokenId: number; jti: string };
 }

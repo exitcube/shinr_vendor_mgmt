@@ -105,4 +105,20 @@ export type vendorOrgOtpTokenPayloadType = {
   userUUId: string;
 }
 
+export interface VendorAuthenticatedUser {
+  vendorId: number;
+  tokenId: number;
+}
+
+export type vendorRefreshTokenPayloadType = {
+  userUUID: string;
+  tokenId: number;
+}
+
+export type vendorAccessTokenPayloadType = {
+  userUUID: string;
+  vendorId: number;
+  tokenId: number;
+}
+
  
