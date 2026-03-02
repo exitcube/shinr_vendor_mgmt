@@ -3,7 +3,7 @@ import { APIError } from "../types/errors";
 import { loginVendorBody, refreshRequestBody } from "./type";
 import { Vendor, VendorToken } from "../models";
 import bcrypt from "bcrypt";
-import { RefreshTokenStatus } from "../utils/constant";
+import { RefreshTokenStatus, VendorAccountStatus } from "../utils/constant";
 import { generateVendorRefreshToken, signVendorAccessToken, verifyVendorRefreshToken } from "../utils/jwt";
 import { createSuccessResponse } from "../utils/response";
 
@@ -28,7 +28,7 @@ export default function controller(fastify: FastifyInstance,opts: FastifyPluginO
             "Vendor not found.",
           );
         }
-        if (existingVendor.accountStatus === "BLOCKED") {
+        if (existingVendor.accountStatus === VendorAccountStatus.BLOCKED) {
           throw new APIError(
             "Vendor account is blocked.",
             403,
@@ -126,7 +126,7 @@ export default function controller(fastify: FastifyInstance,opts: FastifyPluginO
                 "Vendor not found.",
               );
             }
-            if (vendor.accountStatus === "BLOCKED") {
+            if (vendor.accountStatus === VendorAccountStatus.BLOCKED) {
             throw new APIError(
                 "Vendor account is blocked.",
                 403,
