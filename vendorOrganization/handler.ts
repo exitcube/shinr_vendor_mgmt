@@ -254,11 +254,11 @@ export default function controller(fastify: FastifyInstance, opts: FastifyPlugin
             }
             if (vendorOrg.accountStatus === "BLOCKED") {
             throw new APIError(
-                "Vendor account is blocked.",
+                "Account blocked.",
                 403,
-                "VENDOR_ACCOUNT_BLOCKED",
+                "ACCOUNT_BLOCKED",
                 false,
-                "Your account has been blocked. Please contact support for assistance.",
+                "Account has been blocked. Please contact support for assistance.",
             );
             }
 
