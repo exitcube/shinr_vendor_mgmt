@@ -252,6 +252,15 @@ export default function controller(fastify: FastifyInstance, opts: FastifyPlugin
             if (!vendorOrg) {
               throw new APIError('User not found', 404, 'USER_NOT_FOUND', false, 'The user associated with this token does not exist.');
             }
+            if (vendorOrg.accountStatus === "BLOCKED") {
+            throw new APIError(
+                "Vendor account is blocked.",
+                403,
+                "VENDOR_ACCOUNT_BLOCKED",
+                false,
+                "Your account has been blocked. Please contact support for assistance.",
+            );
+            }
 
             const existing = await vendorOrgTokenRepo.findOne({ where: { id: tokenId, } });
             if (!existing) {

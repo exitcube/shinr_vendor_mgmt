@@ -9,3 +9,8 @@ export const VendorOrgAccountStatus = {
     ACTIVE: 'ACTIVE',
     BLOCKED: 'BLOCKED',
 }
+
+export const VendorAccountStatus = {
+  ACTIVE: "ACTIVE",
+  BLOCKED: "BLOCKED"
+}

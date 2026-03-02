@@ -1,7 +1,7 @@
 
 import { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import vendorOrgRoutes from '../vendorOrganization/routes';
-
+import vendorRoutes from '../vendor/routes';
 export default async function routes(
   fastify: FastifyInstance,
   opts: FastifyPluginOptions
@@ -14,4 +14,5 @@ export default async function routes(
   });
 
   fastify.register(vendorOrgRoutes, { prefix: '/vendorOrg' });
+  fastify.register(vendorRoutes, { prefix: '/vendor' })
 }
