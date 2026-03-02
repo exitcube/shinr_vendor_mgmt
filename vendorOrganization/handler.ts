@@ -7,7 +7,7 @@ import { APIError } from '../types/errors';
 import { generateOtp } from '../utils/helper';
 import { generateVendorOrgOtpToken, generateVendorOrgRefreshToken, signVendorOrgAccessToken, verifyVendorOrgOtpToken, verifyVendorOrgRefreshToken } from '../utils/jwt';
 import { createSuccessResponse } from '../utils/response';
-import { RefreshTokenStatus } from '../utils/constant';
+import { RefreshTokenStatus, VendorOrgAccountStatus } from '../utils/constant';
  
 
 export default function controller(fastify: FastifyInstance, opts: FastifyPluginOptions): any {
@@ -31,7 +31,7 @@ export default function controller(fastify: FastifyInstance, opts: FastifyPlugin
                         "The mobile number provided is not registered with us."
                     );
                  }
-                 if(vendorOrg.accountStatus === "BLOCKED"){
+                 if(vendorOrg.accountStatus === VendorOrgAccountStatus.BLOCKED){
                     throw new APIError(
                         "Account blocked",
                         403,
@@ -252,7 +252,7 @@ export default function controller(fastify: FastifyInstance, opts: FastifyPlugin
             if (!vendorOrg) {
               throw new APIError('User not found', 404, 'USER_NOT_FOUND', false, 'The user associated with this token does not exist.');
             }
-            if (vendorOrg.accountStatus === "BLOCKED") {
+            if (vendorOrg.accountStatus === VendorOrgAccountStatus.BLOCKED) {
             throw new APIError(
                 "Account blocked.",
                 403,
