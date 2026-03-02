@@ -5,7 +5,7 @@ import path from 'path';
 // Import all entities from models index
 import { entities } from '../models';
 
-
+const isDBSSL = process.env.DB_SSL === 'true' || process.env.DB_SSL === '1';
 const baseConfig: DataSourceOptions = {
     type: 'postgres',
     host: process.env.DB_HOST || 'localhost',
@@ -17,7 +17,7 @@ const baseConfig: DataSourceOptions = {
     migrations: [path.join(__dirname, '../migrations/*.{ts,js}')],
     synchronize: false,
     logging: ENV.NODE_ENV === 'development',
-    ssl: ENV.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+    ssl: isDBSSL ? { rejectUnauthorized: false } : false,
     extra: {
         max: ENV.NODE_ENV === 'production' ? 20 : 10,
         min: ENV.NODE_ENV === 'production' ? 5 : 2,
