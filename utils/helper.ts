@@ -1,3 +1,9 @@
+import { randomInt } from "crypto";
+
+export function generateOtp(): string {
+  return String(randomInt(0, 10000)).padStart(4, "0"); // range: 0000–9999
+}
+
 // Extracts "YYYY-MM-DD" and timezone offset ("+04:00", "-05:00", "Z")
 function parseIsoDateAndOffset(iso: string) {
   const match = iso.match(

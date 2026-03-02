@@ -1,5 +1,4 @@
 import { Entity, PrimaryGeneratedColumn,Column,CreateDateColumn,UpdateDateColumn,JoinColumn,OneToOne,ManyToOne,Generated,Index} from "typeorm";
-import { Vendor } from "./Vendor";
 import { VendorOrganization } from "./VendorOrganization";
 
 
